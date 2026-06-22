@@ -6,37 +6,47 @@ from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score
 
-# ====================================
+# =====================================
 # KONFIGURASI HALAMAN
-# ====================================
+# =====================================
 st.set_page_config(
-    page_title="Dashboard Edu Data",
+    page_title="Dashboard Analisis Data",
+    page_icon="📊",
     layout="wide"
 )
 
-st.title("📚 Dashboard Analisis Data Pendidikan")
+st.title("📊 Dashboard Analisis Data")
+st.markdown("Aplikasi untuk eksplorasi, visualisasi, dan prediksi data.")
 
-# ====================================
-# UPLOAD FILE
-# ====================================
+# =====================================
+# UPLOAD DATASET
+# =====================================
 uploaded_file = st.file_uploader(
-    "Upload file xAPI-Edu-Data.csv",
+    "Upload Dataset CSV",
     type=["csv"]
 )
 
 if uploaded_file is None:
-    st.info("Silakan upload dataset terlebih dahulu.")
+    st.info("Silakan upload file CSV terlebih dahulu.")
     st.stop()
 
-# ====================================
-# LOAD DATA
-# ====================================
+# =====================================
+# MEMBACA DATA
+# =====================================
 df = pd.read_csv(uploaded_file)
 
-# ====================================
-# DATASET
-# ====================================
-st.header("Dataset")
+# =====================================
+# SIDEBAR
+# =====================================
+st.sidebar.header("Informasi Dataset")
+
+st.sidebar.write(f"Baris : {df.shape[0]}")
+st.sidebar.write(f"Kolom : {df.shape[1]}")
+
+# =====================================
+# OVERVIEW DATA
+# =====================================
+st.header("📋 Overview Dataset")
 
 col1, col2 = st.columns(2)
 
@@ -48,104 +58,102 @@ with col2:
 
 st.dataframe(df.head())
 
-# ====================================
-# INFORMASI DATA
-# ====================================
-st.header("Informasi Dataset")
+# =====================================
+# INFORMASI KOLOM
+# =====================================
+st.header("📌 Tipe Data")
 
-st.write(df.dtypes)
+dtype_df = pd.DataFrame({
+    "Kolom": df.columns,
+    "Tipe Data": df.dtypes.astype(str)
+})
 
-# ====================================
+st.dataframe(dtype_df)
+
+# =====================================
 # MISSING VALUE
-# ====================================
-st.header("Missing Value")
+# =====================================
+st.header("🔍 Missing Value")
 
-missing = df.isnull().sum()
+missing_df = pd.DataFrame({
+    "Kolom": df.columns,
+    "Jumlah Missing": df.isnull().sum()
+})
 
-st.dataframe(missing)
+st.dataframe(missing_df)
 
-# ====================================
-# DISTRIBUSI CLASS
-# ====================================
-st.header("Distribusi Class")
+# =====================================
+# STATISTIK DESKRIPTIF
+# =====================================
+st.header("📈 Statistik Deskriptif")
 
-if "Class" in df.columns:
+st.dataframe(df.describe())
 
-    class_count = df["Class"].value_counts().reset_index()
+# =====================================
+# VISUALISASI NUMERIK
+# =====================================
+numeric_cols = df.select_dtypes(
+    include=["int64", "float64"]
+).columns.tolist()
 
-    class_count.columns = ["Class", "Jumlah"]
+if len(numeric_cols) > 0:
 
-    fig = px.bar(
-        class_count,
-        x="Class",
-        y="Jumlah",
-        title="Distribusi Kelas Siswa",
-        text="Jumlah"
+    st.header("📊 Visualisasi Data")
+
+    selected_col = st.selectbox(
+        "Pilih Kolom Numerik",
+        numeric_cols
+    )
+
+    fig = px.histogram(
+        df,
+        x=selected_col,
+        nbins=20,
+        title=f"Distribusi {selected_col}"
     )
 
     st.plotly_chart(fig, use_container_width=True)
 
-# ====================================
-# ANALISIS FITUR NUMERIK
-# ====================================
-st.header("Analisis Fitur Numerik")
-
-numeric_cols = df.select_dtypes(include=["int64", "float64"]).columns.tolist()
-
-if len(numeric_cols) > 0:
-
-    fitur = st.selectbox(
-        "Pilih Fitur",
-        numeric_cols
-    )
-
-    fig2 = px.histogram(
-        df,
-        x=fitur,
-        nbins=20,
-        title=f"Distribusi {fitur}"
-    )
-
-    st.plotly_chart(fig2, use_container_width=True)
-
-# ====================================
+# =====================================
 # KORELASI
-# ====================================
-st.header("Heatmap Korelasi")
-
+# =====================================
 if len(numeric_cols) > 1:
+
+    st.header("🔥 Heatmap Korelasi")
 
     corr = df[numeric_cols].corr()
 
-    fig3 = px.imshow(
+    fig_corr = px.imshow(
         corr,
         text_auto=True,
         aspect="auto"
     )
 
-    st.plotly_chart(fig3, use_container_width=True)
+    st.plotly_chart(fig_corr, use_container_width=True)
 
-# ====================================
+# =====================================
 # MACHINE LEARNING
-# ====================================
-st.header("Prediksi Class Menggunakan Decision Tree")
+# =====================================
+st.header("🤖 Prediksi Data")
 
-if "Class" in df.columns:
+target_column = st.selectbox(
+    "Pilih Kolom Target",
+    df.columns
+)
+
+if st.button("Jalankan Model"):
 
     data_ml = df.copy()
 
     for col in data_ml.columns:
         if data_ml[col].dtype == "object":
-
             le = LabelEncoder()
-
             data_ml[col] = le.fit_transform(
                 data_ml[col].astype(str)
             )
 
-    X = data_ml.drop("Class", axis=1)
-
-    y = data_ml["Class"]
+    X = data_ml.drop(columns=[target_column])
+    y = data_ml[target_column]
 
     X_train, X_test, y_train, y_test = train_test_split(
         X,
@@ -162,35 +170,34 @@ if "Class" in df.columns:
 
     y_pred = model.predict(X_test)
 
-    acc = accuracy_score(
+    accuracy = accuracy_score(
         y_test,
         y_pred
     )
 
     st.success(
-        f"Akurasi Model: {acc:.2%}"
+        f"Akurasi Model : {accuracy:.2%}"
     )
 
-# ====================================
-# FEATURE IMPORTANCE
-# ====================================
-st.header("Feature Importance")
+    importance = pd.DataFrame({
+        "Fitur": X.columns,
+        "Importance": model.feature_importances_
+    })
 
-importance = pd.DataFrame({
-    "Fitur": X.columns,
-    "Nilai": model.feature_importances_
-})
+    importance = importance.sort_values(
+        by="Importance",
+        ascending=False
+    )
 
-importance = importance.sort_values(
-    by="Nilai",
-    ascending=False
-)
+    fig_imp = px.bar(
+        importance,
+        x="Importance",
+        y="Fitur",
+        orientation="h",
+        title="Feature Importance"
+    )
 
-fig4 = px.bar(
-    importance,
-    x="Nilai",
-    y="Fitur",
-    orientation="h"
-)
-
-st.plotly_chart(fig4, use_container_width=True)
+    st.plotly_chart(
+        fig_imp,
+        use_container_width=True
+    )
