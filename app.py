@@ -1,115 +1,170 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import accuracy_score, classification_report
 
-st.set_page_config(
-    page_title="Dashboard Data Siswa",
-    page_icon="📊",
-    layout="wide"
+# ======================
+# LOAD DATA
+# ======================
+st.set_page_config(page_title="Dashboard Edu Data", layout="wide")
+
+st.title("📊 Dashboard Analisis xAPI Edu Data")
+
+df = pd.read_csv("xAPI-Edu-Data.csv")
+
+# ======================
+# DATASET
+# ======================
+st.header("Dataset")
+
+st.write("Jumlah Data :", df.shape[0])
+st.write("Jumlah Kolom :", df.shape[1])
+
+st.dataframe(df.head())
+
+# ======================
+# STATISTIK
+# ======================
+st.header("Statistik Deskriptif")
+
+st.dataframe(df.describe())
+
+# ======================
+# DISTRIBUSI KELAS
+# ======================
+st.header("Distribusi Class")
+
+class_count = df["Class"].value_counts().reset_index()
+class_count.columns = ["Class", "Jumlah"]
+
+fig = px.bar(
+    class_count,
+    x="Class",
+    y="Jumlah",
+    color="Class",
+    title="Distribusi Kelas Siswa"
 )
 
-st.title("📊 Dashboard Analisis Data Siswa")
+st.plotly_chart(fig, use_container_width=True)
 
-# Upload File
-uploaded_file = st.file_uploader(
-    "Upload Dataset CSV",
-    type=["csv"]
+# ======================
+# FITUR NUMERIK
+# ======================
+st.header("Analisis Fitur Numerik")
+
+numeric_cols = [
+    "raisedhands",
+    "VisITedResources",
+    "AnnouncementsView",
+    "Discussion"
+]
+
+selected_feature = st.selectbox(
+    "Pilih Fitur",
+    numeric_cols
 )
 
-if uploaded_file is not None:
+fig2 = px.histogram(
+    df,
+    x=selected_feature,
+    color="Class",
+    nbins=20,
+    title=f"Distribusi {selected_feature}"
+)
 
-    df = pd.read_csv(uploaded_file)
+st.plotly_chart(fig2, use_container_width=True)
 
-    st.subheader("Dataset")
-    st.dataframe(df)
+# ======================
+# KORELASI
+# ======================
+st.header("Heatmap Korelasi")
 
-    # Informasi Dataset
-    st.subheader("Informasi Dataset")
+df_corr = df.copy()
 
-    col1, col2, col3 = st.columns(3)
+le = LabelEncoder()
 
-    col1.metric("Jumlah Data", len(df))
-    col2.metric("Jumlah Kolom", len(df.columns))
-    col3.metric("Jumlah Kelas", df["Class"].nunique())
+for col in df_corr.columns:
+    if df_corr[col].dtype == "object":
+        df_corr[col] = le.fit_transform(df_corr[col])
 
-    st.divider()
+corr = df_corr.corr()
 
-    # Distribusi Class
-    st.subheader("Distribusi Kelas Siswa")
+fig3 = px.imshow(
+    corr,
+    text_auto=True,
+    aspect="auto",
+    title="Matriks Korelasi"
+)
 
-    fig1 = px.histogram(
-        df,
-        x="Class",
-        color="Class",
-        text_auto=True
-    )
+st.plotly_chart(fig3, use_container_width=True)
 
-    st.plotly_chart(fig1, use_container_width=True)
+# ======================
+# MACHINE LEARNING
+# ======================
+st.header("Prediksi Class Siswa")
 
-    # Gender
-    st.subheader("Distribusi Gender")
+data_ml = df.copy()
 
-    fig2 = px.pie(
-        df,
-        names="gender",
-        hole=0.4
-    )
+encoders = {}
 
-    st.plotly_chart(fig2, use_container_width=True)
+for col in data_ml.columns:
+    if data_ml[col].dtype == "object":
+        le = LabelEncoder()
+        data_ml[col] = le.fit_transform(data_ml[col])
+        encoders[col] = le
 
-    # Topic
-    st.subheader("Distribusi Topic")
+X = data_ml.drop("Class", axis=1)
+y = data_ml["Class"]
 
-    topic_count = df["Topic"].value_counts().reset_index()
-    topic_count.columns = ["Topic", "Jumlah"]
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y,
+    test_size=0.2,
+    random_state=42
+)
 
-    fig3 = px.bar(
-        topic_count,
-        x="Topic",
-        y="Jumlah"
-    )
+model = DecisionTreeClassifier(random_state=42)
+model.fit(X_train, y_train)
 
-    st.plotly_chart(fig3, use_container_width=True)
+y_pred = model.predict(X_test)
 
-    # Korelasi
-    st.subheader("Aktivitas Siswa")
+acc = accuracy_score(y_test, y_pred)
 
-    numeric_cols = [
-        "raisedhands",
-        "VisITedResources",
-        "AnnouncementsView",
-        "Discussion"
-    ]
+st.metric("Accuracy", f"{acc:.2%}")
 
-    fig4 = px.scatter_matrix(
-        df,
-        dimensions=numeric_cols,
-        color="Class"
-    )
+report = classification_report(
+    y_test,
+    y_pred,
+    output_dict=True
+)
 
-    st.plotly_chart(fig4, use_container_width=True)
+st.subheader("Classification Report")
 
-    # Filter
-    st.subheader("Filter Data")
+st.dataframe(pd.DataFrame(report).transpose())
 
-    kelas = st.selectbox(
-        "Pilih Class",
-        ["Semua"] + sorted(df["Class"].unique().tolist())
-    )
+# ======================
+# FEATURE IMPORTANCE
+# ======================
+st.header("Feature Importance")
 
-    if kelas != "Semua":
-        filtered_df = df[df["Class"] == kelas]
-    else:
-        filtered_df = df
+importance = pd.DataFrame({
+    "Feature": X.columns,
+    "Importance": model.feature_importances_
+})
 
-    st.dataframe(filtered_df)
+importance = importance.sort_values(
+    by="Importance",
+    ascending=False
+)
 
-    # Statistik
-    st.subheader("Statistik Deskriptif")
+fig4 = px.bar(
+    importance,
+    x="Importance",
+    y="Feature",
+    orientation="h",
+    title="Pengaruh Fitur terhadap Class"
+)
 
-    st.dataframe(
-        filtered_df[numeric_cols].describe()
-    )
-
-else:
-    st.info("Silakan upload file CSV.")
+st.plotly_chart(fig4, use_container_width=True)
